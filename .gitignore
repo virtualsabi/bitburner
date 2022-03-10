@@ -1,0 +1,8 @@
+src/pojo
+node_modules
+dist
+package-lock.json
+.es*
+package.json
+tsconfig.json
+.vscode
