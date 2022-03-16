@@ -11,6 +11,7 @@ const additionalInvestmentOfferRounds = [
 const defaultGoPublicSharesCount = 0
 const defaultGoPublicDividends = 0.1
 const defaultOfficeExpandSize = 30
+const maxWilson = 20
 const upgradeLevelCorpFundsLimit = 100000000000
 const _corpCreationPrice = 150000000000;
 const _prodBoostFunds = 10000000000;
@@ -97,17 +98,22 @@ const bootstrapOfficeSetup: IMap<EmployPattern> = {
     Volhaven: { Operations: 9, Engineer: 9, Business: 9, Management: 9, RandD: 24, Training: 0}
 }
 
-const bootstrapUpgradeSetup: IMap<number> = {
-    SmartFactories: 5,
-    SmartStorage: 30,
-    DreamSense: 30,
-    WilsonAnalytics: 16,
-    NuoptimalNootropicInjectorImplants: 40,
-    SpeechProcessorImplants: 40,
-    NeuralAccelerators: 40,
-    FocusWires: 5,
-    ABCSalesBots: 40,
-    ProjectInsight: 40
+interface LevelUpgradeInfo {
+    count: number
+    bnModFactor: number
+}
+
+const bootstrapUpgradeSetup: IMap<LevelUpgradeInfo> = {
+    SmartFactories: { count: 5, bnModFactor: 1 },
+    SmartStorage: { count: 30, bnModFactor: 1 },
+    DreamSense: { count: 30, bnModFactor: 0.5 },
+    WilsonAnalytics: { count: 16, bnModFactor: 0.5 },
+    NuoptimalNootropicInjectorImplants: { count: 40, bnModFactor: 0.4 },
+    SpeechProcessorImplants: { count: 40, bnModFactor: 0.4 },
+    NeuralAccelerators: { count: 40, bnModFactor: 0.4 },
+    FocusWires: { count: 5, bnModFactor: 0.4 },
+    ABCSalesBots: { count: 40, bnModFactor: 0.4 },
+    ProjectInsight: { count: 40, bnModFactor: 0.4 }
 }
 
 function isOptionSet(options: any[], option: string)
@@ -504,7 +510,7 @@ class CorporationManager {
 
     async scamInvestors(divisionName: string)
     {
-        let aimedInvestmentOffer = baseInvestmentOffer * this.ns.getBitNodeMultipliers().CorporationValuation
+        let aimedInvestmentOffer = baseInvestmentOffer * this.ns.getBitNodeMultipliers().CorporationValuation * 0.9
         while (this.corpApi.getHireAdVertCost(divisionName) < this.corpApi.getCorporation().funds)
         {
             this.corpApi.hireAdVert(divisionName);
@@ -555,9 +561,12 @@ class CorporationManager {
 
     setupInitialUpgrades()
     {
+        let nodeMod = this.ns.getBitNodeMultipliers().CorporationValuation
         for (let upgrade of Object.keys(bootstrapUpgradeSetup))
         {
-            this.levelCorporationUpgrade(CorporationUpgrade[upgrade as keyof typeof CorporationUpgrade], bootstrapUpgradeSetup[upgrade])
+            let levelNodeMod = nodeMod + (1 - nodeMod) * bootstrapUpgradeSetup[upgrade].bnModFactor
+            let targetLevel = Math.ceil(bootstrapUpgradeSetup[upgrade].count * levelNodeMod)
+            this.levelCorporationUpgrade(CorporationUpgrade[upgrade as keyof typeof CorporationUpgrade], targetLevel)
         }
     }
 
@@ -739,6 +748,10 @@ class CorporationManager {
         let advCost = this.corpApi.getHireAdVertCost(divisionName)
         // at the moment i do not buy wilson after the initial 16. have to check some calculations if usefull or not
         let wilsonCost = Infinity //this.corpApi.getUpgradeLevelCost(CorporationUpgrade.WilsonAnalytics)
+        if (this.corpApi.getUpgradeLevel(CorporationUpgrade.WilsonAnalytics) < maxWilson)
+        {
+            wilsonCost = this.corpApi.getUpgradeLevelCost(CorporationUpgrade.WilsonAnalytics)
+        }
 
         while (Math.min(advCost, wilsonCost) < this.corpApi.getCorporation().funds && this.adVertMax != Infinity)
         {
@@ -759,6 +772,10 @@ class CorporationManager {
             advCost = this.corpApi.getHireAdVertCost(divisionName)
             // at the moment i do not buy wilson after the initial 16. have to check some calculations if usefull or not
             wilsonCost = Infinity //this.corpApi.getUpgradeLevelCost(CorporationUpgrade.WilsonAnalytics)
+            if (this.corpApi.getUpgradeLevel(CorporationUpgrade.WilsonAnalytics) < maxWilson)
+            {
+                wilsonCost = this.corpApi.getUpgradeLevelCost(CorporationUpgrade.WilsonAnalytics)
+            }
         }
     }
 
@@ -817,6 +834,15 @@ class CorporationManager {
             if (this.corpApi.hasResearched(divisionName, "Market-TA.II") && !this.corpApi.hasResearched(divisionName, "Self-Correcting Assemblers") && this.corpApi.getDivision(divisionName).research > researchCost)
             {
                 this.corpApi.research(divisionName, "Self-Correcting Assemblers")
+            }
+        }
+        catch(e) {}
+
+        try {
+            let researchCost = this.corpApi.getResearchCost(divisionName, "Overclock") * 6
+            if (this.corpApi.hasResearched(divisionName, "Market-TA.II") && !this.corpApi.hasResearched(divisionName, "Overclock") && this.corpApi.getDivision(divisionName).research > researchCost)
+            {
+                this.corpApi.research(divisionName, "Overclock")
             }
         }
         catch(e) {}
